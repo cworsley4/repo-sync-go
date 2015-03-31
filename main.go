@@ -2,6 +2,7 @@ package main
 
 import (
   "fmt"
+  "sync"
 	"encoding/json"
 	"io/ioutil"
   "net/http"
@@ -32,9 +33,8 @@ var ending = `
 
 func main() {
 	var repos []Repo
-	var done = make(chan int)
 
-  resp, _ := http.Get("http://intranet.redventures.net/admin/dev/repo_config/repo_ajax.php?action=get-user-repos&username=cworsley")
+  resp, _ := http.Get("")
   body, _ := ioutil.ReadAll(resp.Body)
 	err := json.Unmarshal(body, &repos)
 
@@ -42,21 +42,27 @@ func main() {
 		panic(err)
 	}
 
-	for key, _ := range repos {
-		fmt.Print("\n")
-		repo := repos[key]
+  var wg sync.WaitGroup
+  var tasks = make(chan Repo)
 
-		go func(repo Repo, done chan int) {
-      fmt.Println("Cloning... %s", repo.RepoName)
-			// cmd := exec.Command("git", "clone", repo.SourceURL)
-      cmd := exec.Command("sleep", "5")
-      cmd.Run()
+  for i := 0; i < 10; i++ {
+    wg.Add(1)
+    go func(wg *sync.WaitGroup) {
+      defer wg.Done()
+      for task := range tasks {
+        fmt.Println("Cloning... %s", task.RepoName)
+        cmd := exec.Command("git", "clone", task.SourceURL)
+        cmd.Run()
+      }
+    }(&wg)
+  }
 
-			done <- 0
-		}(repo, done)
+  for i := 0; i < len(repos); i++ {
+    tasks <- repos[i]
+  }
 
-		<-done
-	}
+  close(tasks)
 
+  wg.Wait()
 	fmt.Print(ending)
 }
