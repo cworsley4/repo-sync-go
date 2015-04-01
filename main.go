@@ -1,68 +1,90 @@
 package main
 
 import (
-  "fmt"
+	"os"
+	"fmt"
   "sync"
-	"encoding/json"
-	"io/ioutil"
-  "net/http"
-	"os/exec"
+  _ "bytes"
+  _ "os/exec"
+	"net/http"
+  "io/ioutil"
+  "encoding/json"
 )
 
 type Repo struct {
-	RepoID       string
-	RepoName     string
-	RepoDesc     string
-	SourceURL    string
-	LocalPath    string
-	Active       string
-	ServerRoleID string
-	Required     string
-	IsRVStandard string
-	StashProject string
+	RepoID         string
+	RepoName       string
+	RepoDesc       string
+	SourceURL      string
+	LocalPath      string
+	Active         string
+	IntranetUserID string
 }
 
-var ending = `
-     _____                     ____                  ____
-    / ___/__  ______  _____   / __ \___  _______  __/ / /______
-    \__ \/ / / / __ \/ ___/  / /_/ / _ \/ ___/ / / / / __/ ___/
-   ___/ / /_/ / / / / /__   / _, _/  __(__  ) /_/ / / /_(__  )
-  /____/\__, /_/ /_/\___/  /_/ |_|\___/____/\____/_/\__/____/
-       /____/
-`
-
 func main() {
-	var repos []Repo
+  signature, _ := ioutil.ReadFile("./signature.txt")
 
-  resp, _ := http.Get("")
-  body, _ := ioutil.ReadAll(resp.Body)
+	var repos []Repo
+	newRepos := []string{}
+	updatedRepos := []string{}
+
+  me := Whoami()
+  url := ""
+  url += me
+
+	resp, _ := http.Get(url)
+	body, _ := ioutil.ReadAll(resp.Body)
 	err := json.Unmarshal(body, &repos)
 
 	if err != nil {
 		panic(err)
 	}
 
-  var wg sync.WaitGroup
-  var tasks = make(chan Repo)
+	var wg sync.WaitGroup
+	var tasks = make(chan Repo)
 
-  for i := 0; i < 10; i++ {
-    wg.Add(1)
-    go func(wg *sync.WaitGroup) {
-      defer wg.Done()
-      for task := range tasks {
-        fmt.Println("Cloning... %s", task.RepoName)
-        cmd := exec.Command("git", "clone", task.SourceURL)
-        cmd.Run()
-      }
-    }(&wg)
+  maxWorkers := len(repos)
+
+  if maxWorkers > 10 {
+    maxWorkers = 10
   }
 
-  for i := 0; i < len(repos); i++ {
-    tasks <- repos[i]
-  }
+  fmt.Println("Spinning up", maxWorkers, "workers")
 
-  close(tasks)
+	for i := 0; i < maxWorkers; i++ {
+		wg.Add(1)
+    fmt.Println("Adding Worker", i)
+		go func(wg *sync.WaitGroup) {
+			for task := range tasks {
+				_, err := os.Stat(task.LocalPath)
 
-  wg.Wait()
-	fmt.Print(ending)
+				if err == nil {
+          updatedRepos = append(updatedRepos, task.RepoName)
+          Pull(&task)
+          fmt.Println("Pull complete for", task.RepoName)
+        } else {
+          newRepos = append(newRepos, task.RepoName)
+          Clone(&task)
+          fmt.Println("Cloning complete for", task.RepoName)
+        }
+
+			}
+
+      wg.Done()
+		}(&wg)
+	}
+
+	for i := 0; i < len(repos); i++ {
+		if len(repos[i].IntranetUserID) > 0 {
+			tasks <- repos[i]
+		}
+	}
+
+  fmt.Println("New Repos: %s", len(newRepos))
+  fmt.Println("Updated Repos: %s", len(updatedRepos))
+
+	close(tasks)
+
+	wg.Wait()
+	fmt.Print(string(signature))
 }

@@ -1,6 +1,9 @@
 # RV Files
 repos.json
 
+# Binary
+repo-sync-go
+
 # Compiled Object files, Static and Dynamic libs (Shared Objects)
 *.o
 *.a
