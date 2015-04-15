@@ -1,14 +1,14 @@
 package main
 
 import (
-	"os"
+	_ "bytes"
+	"encoding/json"
 	"fmt"
-  "sync"
-  _ "bytes"
-  _ "os/exec"
+	"io/ioutil"
 	"net/http"
-  "io/ioutil"
-  "encoding/json"
+	"os"
+	_ "os/exec"
+	"sync"
 )
 
 type Repo struct {
@@ -22,15 +22,15 @@ type Repo struct {
 }
 
 func main() {
-  signature, _ := ioutil.ReadFile("./signature.txt")
+	signature, _ := ioutil.ReadFile("./signature.txt")
 
 	var repos []Repo
 	newRepos := []string{}
 	updatedRepos := []string{}
 
-  me := Whoami()
-  url := ""
-  url += me
+	me := Whoami()
+	url := "http://intranet.redventures.net/admin/dev/repo_config/repo_ajax.php?action=get-user-repos&username="
+	url += me
 
 	resp, _ := http.Get(url)
 	body, _ := ioutil.ReadAll(resp.Body)
@@ -43,34 +43,34 @@ func main() {
 	var wg sync.WaitGroup
 	var tasks = make(chan Repo)
 
-  maxWorkers := len(repos)
+	maxWorkers := len(repos)
 
-  if maxWorkers > 10 {
-    maxWorkers = 10
-  }
+	if maxWorkers > 10 {
+		maxWorkers = 10
+	}
 
-  fmt.Println("Spinning up", maxWorkers, "workers")
+	fmt.Println("Spinning up", maxWorkers, "workers")
 
 	for i := 0; i < maxWorkers; i++ {
 		wg.Add(1)
-    fmt.Println("Adding Worker", i)
+		fmt.Println("Adding Worker", i)
 		go func(wg *sync.WaitGroup) {
 			for task := range tasks {
 				_, err := os.Stat(task.LocalPath)
 
 				if err == nil {
-          updatedRepos = append(updatedRepos, task.RepoName)
-          Pull(&task)
-          fmt.Println("Pull complete for", task.RepoName)
-        } else {
-          newRepos = append(newRepos, task.RepoName)
-          Clone(&task)
-          fmt.Println("Cloning complete for", task.RepoName)
-        }
+					updatedRepos = append(updatedRepos, task.RepoName)
+					Pull(&task)
+					fmt.Println("Pull complete for", task.RepoName)
+				} else {
+					newRepos = append(newRepos, task.RepoName)
+					Clone(&task)
+					fmt.Println("Cloning complete for", task.RepoName)
+				}
 
 			}
 
-      wg.Done()
+			wg.Done()
 		}(&wg)
 	}
 
@@ -80,8 +80,8 @@ func main() {
 		}
 	}
 
-  fmt.Println("New Repos: %s", len(newRepos))
-  fmt.Println("Updated Repos: %s", len(updatedRepos))
+	fmt.Println("New Repos: %s", len(newRepos))
+	fmt.Println("Updated Repos: %s", len(updatedRepos))
 
 	close(tasks)
 

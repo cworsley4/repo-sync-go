@@ -1,18 +1,17 @@
-
 package main
 
 import (
-  "strings"
-  "os/exec"
+	"os/exec"
+	"strings"
 )
 
 func Whoami() string {
-  whoami := exec.Command("whoami")
-  output, err := whoami.Output()
+	whoami := exec.Command("whoami")
+	output, err := whoami.Output()
 
-  if err != nil {
-    panic(err)
-  }
+	if err != nil {
+		panic(err)
+	}
 
-  return strings.Trim(string(output), " \n")
+	return strings.Trim(string(output), " \n")
 }
